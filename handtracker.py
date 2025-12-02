@@ -1,21 +1,28 @@
 import cv2
 import mediapipe as mp
 import csv
+import time
 
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 
-# Start webcam
+# --- Init webcam ---
 cap = cv2.VideoCapture(0)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
 
-# Create CSV file
-csv_file = open("hand_wrist_only.csv", "w", newline="")
+# --- CSV File ---
+csv_file = open("middle_finger_center.csv", "w", newline="")
 csv_writer = csv.writer(csv_file)
+csv_writer.writerow(["time", "hand", "center_x", "center_y", "center_z"])
 
-# Header: frame, hand_id, wrist_x, wrist_y, wrist_z
-csv_writer.writerow(["frame", "hand", "wrist_x", "wrist_y", "wrist_z"])
+# --- Timer ---
+start_time = time.time()
+last_save_time = 0.0   # seconds
 
-frame_i = 0
+# Middle Finger ID mapping
+MCP = 9   # Middle finger MCP joint
+TIP = 12  # Middle finger tip
 
 with mp_hands.Hands(
     max_num_hands=2,
@@ -28,41 +35,56 @@ with mp_hands.Hands(
         if not ret:
             break
 
-        # BGR -> RGB
-        img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        h, w, _ = frame.shape
 
-        # Process with MediaPipe
-        results = hands.process(img)
+        # BGR → RGB
+        img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = hands.process(img_rgb)
 
-        # RGB -> BGR
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        # True elapsed time
+        current_time = time.time() - start_time
 
-        # --- SAVE ONLY EVERY 5 FRAMES ---
-        if frame_i % 5 == 0:
+        # ---- SAVE DATA EVERY 0.5 SECONDS ----
+        if current_time - last_save_time >= 0.5:
             if results.multi_hand_landmarks:
                 for hand_id, hand_landmarks in enumerate(results.multi_hand_landmarks):
-                    
-                    wrist = hand_landmarks.landmark[0]   # wrist landmark (ID = 0)
+                    lm = hand_landmarks.landmark
 
+                    # Compute center of middle finger (MCP + TIP) / 2
+                    cx = (lm[MCP].x + lm[TIP].x) / 2
+                    cy = (lm[MCP].y + lm[TIP].y) / 2
+                    cz = (lm[MCP].z + lm[TIP].z) / 2
+
+                    # Save in CSV (normalized coordinates)
                     csv_writer.writerow([
-                        frame_i,
+                        round(current_time, 2),
                         hand_id,
-                        wrist.x,
-                        wrist.y,
-                        wrist.z
+                        cx, cy, cz
                     ])
 
-        # Draw skeleton on screen
+            last_save_time = current_time
+
+        # ---- DRAW TRACKER ON SCREEN ----
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
+                lm = hand_landmarks.landmark
+
+                # Calculate pixel position for center
+                cx = int(((lm[MCP].x + lm[TIP].x) / 2) * w)
+                cy = int(((lm[MCP].y + lm[TIP].y) / 2) * h)
+
+                # Draw circle
+                cv2.circle(frame, (cx, cy), 12, (0, 255, 0), -1)
+
+                # Draw hand skeleton
                 mp_drawing.draw_landmarks(
-                    img, hand_landmarks, mp_hands.HAND_CONNECTIONS
+                    frame, hand_landmarks, mp_hands.HAND_CONNECTIONS
                 )
 
-        cv2.imshow("Hand Tracker", img)
-        frame_i += 1
+        # Show output
+        cv2.imshow("Middle Finger Center Tracker", frame)
 
-        # ESC to exit
+        # Exit with ESC
         if cv2.waitKey(1) & 0xFF == 27:
             break
 
