@@ -33,8 +33,8 @@ csv_writer.writerow([
 start_time = time.time()
 last_save = 0.0
 
-# Chin landmark IDs
-CHIN_IDS = [152, 148, 377]
+# Store last valid mouth
+last_chin_x = last_chin_y = last_chin_z = ""
 
 with mp_hands.Hands(
     max_num_hands=2,
@@ -61,32 +61,20 @@ with mp_hands.Hands(
 
         now = time.time() - start_time
 
-        chin_points = []
-
-        # ---------------- Chin (3 point average) ----------------
+        # ---------------- Mouth (stored as chin) ----------------
         if face_results.multi_face_landmarks:
 
-            face_lms = face_results.multi_face_landmarks[0].landmark
+            face = face_results.multi_face_landmarks[0].landmark
 
-            for cid in CHIN_IDS:
-                lm = face_lms[cid]
-                chin_points.append((lm.x, lm.y, lm.z))
+            lm13 = face[13]
+            lm14 = face[14]
 
-                # draw each raw chin point
-                cx, cy = int(lm.x * w), int(lm.y * h)
-                cv2.circle(frame, (cx, cy), 4, (0,255,255), -1)
+            last_chin_x = (lm13.x + lm14.x) / 2
+            last_chin_y = (lm13.y + lm14.y) / 2
+            last_chin_z = (lm13.z + lm14.z) / 2
 
-        # Compute average chin
-        if chin_points:
-            chin_x = sum(p[0] for p in chin_points) / len(chin_points)
-            chin_y = sum(p[1] for p in chin_points) / len(chin_points)
-            chin_z = sum(p[2] for p in chin_points) / len(chin_points)
-
-            fx, fy = int(chin_x * w), int(chin_y * h)
-            cv2.circle(frame, (fx, fy), 10, (0,0,255), -1)
-
-        else:
-            chin_x = chin_y = chin_z = ""
+            cx, cy = int(last_chin_x * w), int(last_chin_y * h)
+            cv2.circle(frame, (cx, cy), 6, (0,255,255), -1)
 
         # ---------------- Hands ----------------
         if hand_results.multi_hand_landmarks:
@@ -110,13 +98,15 @@ with mp_hands.Hands(
                         round(now,3),
                         hid,
                         mx,my,mz,
-                        chin_x,chin_y,chin_z
+                        last_chin_x,
+                        last_chin_y,
+                        last_chin_z
                     ])
 
-        if now - last_save >= 0.5:
-            last_save = now
+            if now - last_save >= 0.5:
+                last_save = now
 
-        cv2.imshow("Hand + Chin Tracker", frame)
+        cv2.imshow("Hand + Mouth Tracker", frame)
 
         if cv2.waitKey(1) == 27:
             break
