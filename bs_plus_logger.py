@@ -4,7 +4,7 @@ import json
 import csv
 from datetime import datetime
 
-CSV_FILE = "bsevents_data.csv"
+CSV_FILE = "bs_data.csv"
 
 # Create CSV file if not exists
 def create_csv():
@@ -68,3 +68,4 @@ async def log_data():
 if __name__ == "__main__":
     create_csv()
     asyncio.run(log_data())
+
